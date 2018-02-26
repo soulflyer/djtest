@@ -1,0 +1,111 @@
+* Setup clojurescript project
+
+** Components
+Descjop appears to have the most complex project structure so it's probably easiest to use the template for that and add in the other parts by hand.
+*** Descjop
+*** Re-frame
+
+** Descjop Setup
+Firstly, change the port number. Too many things trying to use 3449, lets keep that free for trying out new stuff. The port is defined in 2 places:
+
+    project.clj
+
+#+BEGIN_SRC clojure
+  :figwheel {:http-server-root "public"
+             :ring-handler figwheel-middleware/app
+             :server-port 3449}
+#+END_SRC
+
+and src_front_profile/<project-name>_front/dev/init.cljs
+
+#+BEGIN_SRC clojure
+  (fw/watch-and-reload
+    :websocket-url   "ws://localhost:3449/figwheel-ws"
+    :jsload-callback 'start-descjop!)
+#+END_SRC
+
+Change the owner and web address in src/<project-name>/core.cljs as per the instructions.
+
+Run descjop-init. This seems to give a lot of warnings that may need attention before too long. Works ok for now.
+
+djtest: lein descjop-init
+npm WARN deprecated wrench@1.5.4: wrench.js is deprecated! You should check out fs-extra (https://github.com/jprichardson/node-fs-extra) for any operations you were using wrench for. Thanks for all the usage over the years.
+npm WARN deprecated minimatch@0.2.14: Please update to minimatch 3.0.2 or higher to avoid a RegExp DoS issue
+npm WARN deprecated minimatch@0.2.12: Please update to minimatch 3.0.2 or higher to avoid a RegExp DoS issue
+npm WARN deprecated graceful-fs@1.2.3: graceful-fs v3.0.0 and before will fail on node releases >= v7.0. Please update to graceful-fs@^4.0.0 as soon as possible. Use 'npm ls graceful-fs' to find it in the tree.
+npm WARN deprecated node-uuid@1.4.8: Use uuid module instead
+npm WARN deprecated minimatch@0.3.0: Please update to minimatch 3.0.2 or higher to avoid a RegExp DoS issue
+npm notice created a lockfile as package-lock.json. You should commit this file.
+added 340 packages in 6.71s
+Running "download-electron" task
+
+Done.
+djtest:
+
+Editing gruntfile.js and changing the electron version to 1.8.2 and adjusting versions in package.json like this gets rid of the warnings:
+
+#+BEGIN_SRC js
+    "grunt": "^1.0.2",
+    "grunt-download-electron": "^2.1.4",
+    "electron-packager": "^11.0.1"
+#+END_SRC
+
+*** Cider Problems
+Cider jack-in gives errors:
+
+user> FileNotFoundException Could not locate figwheel_sidecar/repl_api__init.class or figwheel_sidecar/repl_api.clj on classpath. Please check that namespaces with dashes use underscores in the Clojure file name.  clojure.lang.RT.load (RT.java:456)
+user>
+
+Fixed this by adding stuff to the project.clj file:
+
+#+BEGIN_SRC clojure
+  :profiles {:dev {:dependencies [[figwheel "0.5.11"]
+                                  [com.cemerick/piggieback "0.2.2"]
+                                  [figwheel-sidecar "0.5.11"]]}}
+#+END_SRC
+
+Note I also pulled the figwheel line from the general :dependancies and moved it to the :dev profile. Note I also updated it to 0.5.11. I wonder if the plugins should also be moved to the dev profile. re-frame template has the lein-figwheel plugin there.
+** Adding Re-Frame
+*** Preview
+Looking at the simple example for re-frame I can see the contents of src are compiled to resources/public/js/client.js. This is included by the html file and on js load the function simple.core.run is run. run is defined like this; (note the addition of ^:export)
+
+#+BEGIN_SRC clojure
+  (defn ^:export run
+    []
+    (rf/dispatch-sync [:initialize])     ;; puts a value into application state
+    (reagent/render [ui]              ;; mount the application's ui into '<div id="app" />'
+                    (js/document.getElementById "app")))
+#+END_SRC
+
+ui just looks like standard re-com/reagent stuff
+
+The html looks like this:
+#+BEGIN_SRC html
+    <script>
+        window.onload = function () {
+            simple.core.run();
+        }
+    </script>
+#+END_SRC
+
+So it looks like I just need to make sure that
+1) the cljs gets compiled to the right place
+2) the application state is initialised and the ui rendered on js load
+Most of this should happen anyway from the existing descjop code.
+
+Added [re-frame "0.10.5"] to project.clj
+also updated reagent
+
+Added the following requires to src_front/core.cljs
+#+BEGIN_SRC clojure
+  [re-frame.core :as re-frame]
+  [<project>.events :as events]
+  [<project>.views :as views]
+  [<project>.config :as config]
+#+END_SRC
+and created the corresponding files in src_front/<project>
+
+Added this line to core.cljs mount-root
+#+BEGIN_SRC clojure
+(re-frame/clear-subscription-cache!)
+#+END_SRC
